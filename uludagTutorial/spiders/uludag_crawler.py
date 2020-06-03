@@ -22,9 +22,9 @@ class UludagCrawler(scrapy.Spider):
     def parse(self, response):
 
         title_urls = response.xpath("//ul[@class='index-list']/li/a")
-        # If program has reached the end of the gündem's page, stop.
+        
+        # If program has reached the end of the main pages, stop.
         if title_urls.extract_first() is None:
-            # TODO: for making infinite to program, it must return the beginning from here when it reaches here.
             return
 
         for t_url in title_urls:
@@ -58,8 +58,7 @@ class UludagCrawler(scrapy.Spider):
                                      callback=self.parse_post_detail,
                                      dont_filter=True,
                                      meta={'l': l})
-            # yield l.load_item()
-
+        
         next_page_url = response.xpath("//a[@class='nextpage']/@href").extract_first()
 
         if next_page_url is not None:
@@ -69,6 +68,10 @@ class UludagCrawler(scrapy.Spider):
 
     def parse_post_detail(self, response):
         l = response.meta['l']
+        
+        # Generate Key
+        mongo_key = encode_item(dict(l.load_item()))
+        
         user_detail = dict()
         user_detail['bio'] = response.xpath(".//div[@class='popkuladi']/p/small/text()").extract_first()
         for meta in response.xpath("//div[@class='user-stats mhover']/div[@class='stat']"):
@@ -77,7 +80,6 @@ class UludagCrawler(scrapy.Spider):
             user_detail[key] = value
         l.add_value("user_detail", user_detail)
 
-        mongo_key = encode_item(dict(l.load_item()))
-        ulu_db.update_one({mongo_key: l.load_item()}, {"$set": {mongo_key: l.load_item()}}, upsert=True)
+        ulu_db.update_one({'_id': mongo_key}, {"$set": l.load_item()}, upsert=True)
 
         yield l.load_item()
